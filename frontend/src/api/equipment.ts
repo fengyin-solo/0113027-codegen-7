@@ -30,6 +30,76 @@ export interface MaintenanceRecord {
   createdAt?: string
 }
 
+/** 计划状态：待执行 / 已完成 / 已取消 */
+export type PlanStatus = 'pending' | 'completed' | 'cancelled'
+
+/** 逾期风险等级：已逾期 / 7天内到期 / 30天内到期 / 正常 */
+export type RiskLevel = 'overdue' | 'soon' | 'upcoming' | 'normal'
+
+/** 保养计划 */
+export interface MaintenancePlan {
+  id: number
+  equipmentId: number
+  equipmentName: string
+  equipmentCode: string
+  equipmentType: string
+  maintenanceType: string
+  /** 计划保养日期 YYYY-MM-DD */
+  plannedDate: string
+  /** 负责人 */
+  assignee: string
+  /** 保养周期（天），0 表示一次性保养（故障/紧急维修） */
+  cycleDays: number
+  content: string
+  status: PlanStatus
+  remark?: string
+  createdAt: string
+  completedAt?: string
+}
+
+/** 批量生成计划入参（plannedDate 为统一日期；items 可按设备指定日期） */
+export interface GeneratePlansParams {
+  equipmentIds: number[]
+  maintenanceType: string
+  plannedDate: string
+  assignee: string
+  cycleDays: number
+  content: string
+  remark?: string
+  /** 按设备指定计划日期（“按各设备下次保养日期”模式）；优先级高于 plannedDate */
+  items?: { equipmentId: number; plannedDate: string }[]
+}
+
+/** 单个计划的生成/保存结果（用于说明跳过或失败原因） */
+export interface PlanSaveResult {
+  success: boolean
+  equipmentName: string
+  plannedDate: string
+  reason?: string
+}
+
+/** 批量调整入参：负责人与周期二选一或同时调整 */
+export interface BatchAdjustParams {
+  planIds: number[]
+  assignee?: string
+  cycleDays?: number
+}
+
+/** 完成维护（登记）入参 */
+export interface CompleteMaintenanceParams {
+  equipmentId: number
+  maintenanceType: string
+  maintenanceDate: string
+  maintenancePerson: string
+  maintenanceContent: string
+  maintenanceResult: string
+  cost: number
+  nextMaintenanceDate: string
+  remark?: string
+  /** 从计划完成时传入计划 id，会同时把计划置为已完成 */
+  planId?: number
+}
+
 export interface EquipmentQuery {
   equipmentName?: string
   equipmentType?: string
@@ -119,5 +189,54 @@ export const getStatusOptions = () => {
   return request({
     url: '/api/equipment/statuses',
     method: 'get'
+  })
+}
+
+// ---------------- 保养计划 ----------------
+
+export const getMaintenancePlans = (params?: { status?: PlanStatus; equipmentId?: number }) => {
+  return request({
+    url: '/api/maintenance/plans',
+    method: 'get',
+    params
+  })
+}
+
+export const generateMaintenancePlans = (data: GeneratePlansParams) => {
+  return request({
+    url: '/api/maintenance/plans/generate',
+    method: 'post',
+    data
+  })
+}
+
+export const updateMaintenancePlan = (data: Partial<MaintenancePlan> & { id: number }) => {
+  return request({
+    url: '/api/maintenance/plans',
+    method: 'put',
+    data
+  })
+}
+
+export const batchAdjustPlans = (data: BatchAdjustParams) => {
+  return request({
+    url: '/api/maintenance/plans/batch-adjust',
+    method: 'post',
+    data
+  })
+}
+
+export const completeMaintenance = (data: CompleteMaintenanceParams) => {
+  return request({
+    url: '/api/maintenance/complete',
+    method: 'post',
+    data
+  })
+}
+
+export const cancelMaintenancePlan = (id: number) => {
+  return request({
+    url: `/api/maintenance/plans/${id}/cancel`,
+    method: 'post'
   })
 }

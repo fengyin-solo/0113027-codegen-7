@@ -45,9 +45,28 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'equipment',
-        name: 'Equipment',
-        component: () => import('@/views/equipment/index.vue'),
-        meta: { title: '设备管理', icon: 'Tools' }
+        redirect: '/equipment/overview',
+        meta: { title: '设备管理', icon: 'Tools' },
+        children: [
+          {
+            path: 'overview',
+            name: 'MaintenanceOverview',
+            component: () => import('@/views/equipment/overview.vue'),
+            meta: { title: '维护概览看板' }
+          },
+          {
+            path: 'plan',
+            name: 'MaintenancePlan',
+            component: () => import('@/views/equipment/plan.vue'),
+            meta: { title: '保养计划工作台' }
+          },
+          {
+            path: 'list',
+            name: 'EquipmentList',
+            component: () => import('@/views/equipment/index.vue'),
+            meta: { title: '设备列表与登记' }
+          }
+        ]
       },
       {
         path: 'hse',
