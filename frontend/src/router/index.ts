@@ -50,6 +50,26 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '设备管理', icon: 'Tools' }
       },
       {
+        path: 'maintenance',
+        name: 'Maintenance',
+        redirect: '/maintenance/board',
+        meta: { title: '维护管理', icon: 'Calendar' },
+        children: [
+          {
+            path: 'board',
+            name: 'MaintenanceBoard',
+            component: () => import('@/views/maintenance/board.vue'),
+            meta: { title: '维护概览' }
+          },
+          {
+            path: 'plan',
+            name: 'MaintenancePlan',
+            component: () => import('@/views/maintenance/workbench.vue'),
+            meta: { title: '计划工作台' }
+          }
+        ]
+      },
+      {
         path: 'hse',
         name: 'HSE',
         component: () => import('@/views/hse/index.vue'),

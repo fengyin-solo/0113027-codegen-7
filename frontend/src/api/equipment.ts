@@ -27,7 +27,61 @@ export interface MaintenanceRecord {
   maintenanceResult: string
   cost?: number
   remark?: string
+  nextMaintenanceDate?: string
   createdAt?: string
+}
+
+export type PlanStatus = '待安排' | '已安排' | '进行中' | '已完成' | '已取消'
+export type RiskLevel = '逾期' | '临期' | '正常'
+
+export interface MaintenancePlan {
+  id: number
+  equipmentId: number
+  equipmentName: string
+  equipmentCode: string
+  equipmentType: string
+  maintenanceType: string
+  planDate: string
+  cycleDays: number
+  owner: string
+  riskLevel: RiskLevel
+  status: PlanStatus
+  remark?: string
+  createdAt: string
+  completedAt?: string
+  /** 生成时检测到的潜在冲突（同负责人同日 / 当日容量等） */
+  conflicts: string[]
+}
+
+export interface PlanGenerateParams {
+  scope: 'all' | 'overdue' | 'due'
+  equipmentIds: number[]
+  maintenanceTypes: string[]
+  riskLevels: RiskLevel[]
+  dateFrom: string
+  dateTo: string
+  defaultOwner: string
+  defaultCycleDays: number
+}
+
+export interface PlanConflict {
+  planId: number
+  equipmentName: string
+  planDate: string
+  reasons: string[]
+}
+
+export interface PlanGenerateResult {
+  created: number
+  skipped: number
+  conflicts: PlanConflict[]
+  messages: string[]
+}
+
+export interface PlanBatchUpdate {
+  owner?: string
+  cycleDays?: number
+  dateOffsetDays?: number
 }
 
 export interface EquipmentQuery {

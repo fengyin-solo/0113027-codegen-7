@@ -3,25 +3,25 @@
     <el-row :gutter="20" class="mb-20">
       <el-col :span="6">
         <div class="stat-card" @click="filterByStatus('')">
-          <div class="stat-value">{{ equipmentStats.total }}</div>
+          <div class="stat-value">{{ store.equipmentStats.total }}</div>
           <div class="stat-label">设备总数</div>
         </div>
       </el-col>
       <el-col :span="6">
         <div class="stat-card running" @click="filterByStatus('运行中')">
-          <div class="stat-value">{{ equipmentStats.running }}</div>
+          <div class="stat-value">{{ store.equipmentStats.running }}</div>
           <div class="stat-label">运行中</div>
         </div>
       </el-col>
       <el-col :span="6">
         <div class="stat-card maintenance" @click="filterByStatus('待维护')">
-          <div class="stat-value">{{ equipmentStats.maintenance }}</div>
+          <div class="stat-value">{{ store.equipmentStats.maintenance }}</div>
           <div class="stat-label">待维护</div>
         </div>
       </el-col>
       <el-col :span="6">
         <div class="stat-card fault" @click="filterByStatus('故障')">
-          <div class="stat-value">{{ equipmentStats.fault }}</div>
+          <div class="stat-value">{{ store.equipmentStats.fault }}</div>
           <div class="stat-label">故障</div>
         </div>
       </el-col>
@@ -32,18 +32,18 @@
         <div class="card-header">
           <span>设备列表</span>
           <div>
-            <el-button type="primary" size="small">新增设备</el-button>
-            <el-button size="small">批量导入</el-button>
+            <el-button type="primary" size="small" @click="$router.push('/maintenance/board')">维护概览看板</el-button>
+            <el-button type="success" size="small" @click="$router.push('/maintenance/plan')">计划工作台</el-button>
           </div>
         </div>
       </template>
-      
+
       <el-form :inline="true" :model="filterForm" class="filter-form mb-20">
         <el-form-item label="设备名称">
-          <el-input v-model="filterForm.equipmentName" placeholder="请输入设备名称" clearable @input="handleFilter" />
+          <el-input v-model="filterForm.equipmentName" placeholder="请输入设备名称" clearable />
         </el-form-item>
         <el-form-item label="设备类型">
-          <el-select v-model="filterForm.equipmentType" placeholder="请选择设备类型" clearable @change="handleFilter">
+          <el-select v-model="filterForm.equipmentType" placeholder="请选择设备类型" clearable>
             <el-option label="全部" value="" />
             <el-option label="抽油机" value="抽油机" />
             <el-option label="阀门" value="阀门" />
@@ -53,7 +53,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="filterForm.status" placeholder="请选择状态" clearable @change="handleFilter">
+          <el-select v-model="filterForm.status" placeholder="请选择状态" clearable>
             <el-option label="全部" value="" />
             <el-option label="运行中" value="运行中" />
             <el-option label="待维护" value="待维护" />
@@ -69,7 +69,6 @@
             start-placeholder="开始日期"
             end-placeholder="结束日期"
             value-format="YYYY-MM-DD"
-            @change="handleFilter"
           />
         </el-form-item>
         <el-form-item>
@@ -77,7 +76,7 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="filteredEquipmentList" border stripe style="width: 100%" v-loading="loading">
+      <el-table :data="filteredEquipmentList" border stripe style="width: 100%">
         <el-table-column prop="equipmentCode" label="设备编码" width="120" />
         <el-table-column prop="equipmentName" label="设备名称" width="150" />
         <el-table-column prop="equipmentType" label="设备类型" width="120" />
@@ -91,11 +90,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="lastMaintenanceDate" label="上次维护日期" width="130" />
-        <el-table-column prop="nextMaintenanceDate" label="下次维护日期" width="130">
+        <el-table-column prop="nextMaintenanceDate" label="下次维护日期" width="150">
           <template #default="{ row }">
             <span :class="{ 'text-danger': isOverdue(row.nextMaintenanceDate) }">
               {{ row.nextMaintenanceDate }}
               <el-tag v-if="isOverdue(row.nextMaintenanceDate)" type="danger" size="small" class="ml-5">逾期</el-tag>
+              <el-tag v-else-if="isDueSoon(row.nextMaintenanceDate)" type="warning" size="small" class="ml-5">临期</el-tag>
             </span>
           </template>
         </el-table-column>
@@ -103,7 +103,6 @@
           <template #default="{ row }">
             <el-button type="primary" size="small" link @click="viewMaintenanceRecords(row)">维护记录</el-button>
             <el-button type="success" size="small" link @click="openMaintenanceDialog(row)">维护登记</el-button>
-            <el-button type="danger" size="small" link>删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -123,22 +122,24 @@
           <template #header>
             <div class="card-header">
               <span>待维护设备提醒</span>
-              <el-badge :value="overdueCount" class="item" type="danger" />
+              <el-badge :value="store.reminderList.length" class="item" type="danger" />
             </div>
           </template>
-          <el-timeline>
-            <el-timeline-item 
-              v-for="(item, index) in maintenanceList" 
-              :key="index" 
-              :timestamp="item.date" 
+          <el-empty v-if="store.reminderList.length === 0" description="暂无逾期或临期设备" :image-size="60" />
+          <el-timeline v-else>
+            <el-timeline-item
+              v-for="item in store.reminderList"
+              :key="item.id"
+              :timestamp="item.date"
               :type="item.type"
-              @click="handleMaintenanceClick(item)"
               class="timeline-item"
+              @click="goPlan(item.equipmentName)"
             >
               <div class="timeline-content">
                 <span class="equipment-name">{{ item.equipmentName }}</span>
+                <el-tag :type="item.type === 'danger' ? 'danger' : 'warning'" size="small" class="ml-5">{{ item.riskLevel }}</el-tag>
                 <span class="content">{{ item.content }}</span>
-                <el-button type="primary" size="small" link @click.stop="openMaintenanceDialog(item)">立即维护</el-button>
+                <el-button type="primary" size="small" link @click.stop="goPlan(item.equipmentName)">安排计划</el-button>
               </div>
             </el-timeline-item>
           </el-timeline>
@@ -230,7 +231,7 @@
         <span class="label ml-20">设备编码：</span>
         <span class="value">{{ currentEquipment?.equipmentCode }}</span>
       </div>
-      <el-table :data="maintenanceRecords" border stripe style="width: 100%; margin-top: 15px;">
+      <el-table :data="currentRecords" border stripe style="width: 100%; margin-top: 15px;">
         <el-table-column prop="maintenanceDate" label="维护日期" width="120" />
         <el-table-column prop="maintenanceType" label="维护类型" width="120">
           <template #default="{ row }">
@@ -251,6 +252,7 @@
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
       </el-table>
+      <el-empty v-if="currentRecords.length === 0" description="该设备暂无维护记录" :image-size="60" />
       <template #footer>
         <el-button @click="recordDialogVisible = false">关闭</el-button>
       </template>
@@ -259,19 +261,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import * as echarts from 'echarts'
-import type { MaintenanceRecord } from '@/api/equipment'
+import type { Equipment, MaintenanceRecord } from '@/api/equipment'
+import { useMaintenanceStore } from '@/store/modules/maintenance'
+
+const router = useRouter()
+const route = useRoute()
+const store = useMaintenanceStore()
+store.load()
 
 const typeChart = ref<HTMLElement>()
-const loading = ref(false)
+let chart: echarts.ECharts | null = null
 const submitLoading = ref(false)
 const maintenanceDialogVisible = ref(false)
 const recordDialogVisible = ref(false)
 const maintenanceFormRef = ref<FormInstance>()
 
-const currentEquipment = ref<any>(null)
+const currentEquipment = ref<Equipment | null>(null)
 
 const filterForm = reactive({
   equipmentName: '',
@@ -302,109 +311,51 @@ const maintenanceRules: FormRules = {
   maintenanceResult: [{ required: true, message: '请选择维护结果', trigger: 'change' }]
 }
 
-const equipmentStats = ref({
-  total: 156,
-  running: 128,
-  maintenance: 18,
-  fault: 10
-})
-
-const equipmentList = ref([
-  { id: 1, equipmentCode: 'PUMP-001', equipmentName: '抽油机A1', equipmentType: '抽油机', model: 'CYJ12-4.8-73HB', installLocation: 'A井场1号', wellName: 'A-01井', runningHours: 8520, status: '运行中', lastMaintenanceDate: '2024-01-10', nextMaintenanceDate: '2024-02-10' },
-  { id: 2, equipmentCode: 'PUMP-002', equipmentName: '抽油机B3', equipmentType: '抽油机', model: 'CYJ10-3-53HB', installLocation: 'B井场3号', wellName: 'B-03井', runningHours: 6350, status: '运行中', lastMaintenanceDate: '2024-01-05', nextMaintenanceDate: '2024-02-05' },
-  { id: 3, equipmentCode: 'VALVE-001', equipmentName: '阀门组C2', equipmentType: '阀门', model: 'Z41H-16C DN100', installLocation: 'C井场2号', wellName: 'C-02井', runningHours: 12500, status: '待维护', lastMaintenanceDate: '2023-12-20', nextMaintenanceDate: '2024-01-20' },
-  { id: 4, equipmentCode: 'SENSOR-001', equipmentName: '压力传感器D5', equipmentType: '传感器', model: 'PT-300', installLocation: 'D井场5号', wellName: 'D-05井', runningHours: 3200, status: '故障', lastMaintenanceDate: '2023-11-15', nextMaintenanceDate: '2023-12-15' },
-  { id: 5, equipmentCode: 'MOTOR-001', equipmentName: '电机E1', equipmentType: '电机', model: 'Y2-315M-4', installLocation: 'E井场1号', wellName: 'E-01井', runningHours: 9800, status: '运行中', lastMaintenanceDate: '2024-01-08', nextMaintenanceDate: '2024-02-08' },
-  { id: 6, equipmentCode: 'PUMP-003', equipmentName: '抽油机C1', equipmentType: '抽油机', model: 'CYJ12-4.8-73HB', installLocation: 'C井场1号', wellName: 'C-01井', runningHours: 7200, status: '待维护', lastMaintenanceDate: '2023-11-25', nextMaintenanceDate: '2023-12-25' },
-  { id: 7, equipmentCode: 'VALVE-002', equipmentName: '阀门组A3', equipmentType: '阀门', model: 'Z41H-16C DN80', installLocation: 'A井场3号', wellName: 'A-03井', runningHours: 9500, status: '运行中', lastMaintenanceDate: '2024-01-12', nextMaintenanceDate: '2024-02-12' }
-])
-
-const maintenanceList = ref([
-  { id: 3, date: '2024-01-20', equipmentName: '阀门组C2', equipmentCode: 'VALVE-001', content: '到期需要进行常规维护', type: 'warning' },
-  { id: 4, date: '2024-01-25', equipmentName: '压力传感器D5', equipmentCode: 'SENSOR-001', content: '故障待维修', type: 'danger' },
-  { id: 6, date: '2023-12-25', equipmentName: '抽油机C1', equipmentCode: 'PUMP-003', content: '已逾期，请尽快安排维护', type: 'danger' },
-  { id: 2, date: '2024-02-05', equipmentName: '抽油机B3', equipmentCode: 'PUMP-002', content: '即将到期维护', type: 'primary' },
-  { id: 5, date: '2024-02-08', equipmentName: '电机E1', equipmentCode: 'MOTOR-001', content: '即将到期维护', type: 'primary' },
-  { id: 1, date: '2024-02-10', equipmentName: '抽油机A1', equipmentCode: 'PUMP-001', content: '即将到期维护', type: 'primary' }
-])
-
-const maintenanceRecords = ref<MaintenanceRecord[]>([
-  { id: 1, equipmentId: 1, equipmentName: '抽油机A1', equipmentCode: 'PUMP-001', maintenanceType: '常规维护', maintenanceDate: '2024-01-10', maintenancePerson: '张三', maintenanceContent: '检查润滑油、紧固螺丝、清洁设备表面', maintenanceResult: '完成', cost: 500, remark: '运行正常' },
-  { id: 2, equipmentId: 1, equipmentName: '抽油机A1', equipmentCode: 'PUMP-001', maintenanceType: '定期保养', maintenanceDate: '2023-10-15', maintenancePerson: '李四', maintenanceContent: '更换油封、检查皮带张力', maintenanceResult: '完成', cost: 1200, remark: '皮带磨损正常' },
-  { id: 3, equipmentId: 3, equipmentName: '阀门组C2', equipmentCode: 'VALVE-001', maintenanceType: '常规维护', maintenanceDate: '2023-12-20', maintenancePerson: '王五', maintenanceContent: '阀门开关测试、密封检查', maintenanceResult: '完成', cost: 200, remark: '一切正常' }
-])
-
-const overdueCount = computed(() => {
-  return maintenanceList.value.filter(item => item.type === 'danger').length
-})
-
 const filteredEquipmentList = computed(() => {
-  let result = [...equipmentList.value]
-  
+  let result = [...store.equipmentList]
+
   if (filterForm.equipmentName) {
-    result = result.filter(item => 
-      item.equipmentName.includes(filterForm.equipmentName)
-    )
+    result = result.filter((item) => item.equipmentName.includes(filterForm.equipmentName))
   }
-  
   if (filterForm.equipmentType) {
-    result = result.filter(item => 
-      item.equipmentType === filterForm.equipmentType
-    )
+    result = result.filter((item) => item.equipmentType === filterForm.equipmentType)
   }
-  
   if (filterForm.status) {
-    result = result.filter(item => 
-      item.status === filterForm.status
-    )
+    result = result.filter((item) => item.status === filterForm.status)
   }
-  
   if (filterForm.dateRange && filterForm.dateRange.length === 2) {
     const [start, end] = filterForm.dateRange
-    result = result.filter(item => {
-      const nextDate = new Date(item.nextMaintenanceDate)
-      return nextDate >= new Date(start) && nextDate <= new Date(end)
-    })
+    result = result.filter((item) => item.nextMaintenanceDate >= start && item.nextMaintenanceDate <= end)
   }
-  
+
   return result
 })
 
-const getStatusType = (status: string) => {
-  const map: Record<string, any> = {
-    '运行中': 'success',
-    '待维护': 'warning',
-    '故障': 'danger',
-    '停机': 'info'
-  }
-  return map[status] || 'info'
+const currentRecords = computed<MaintenanceRecord[]>(() =>
+  currentEquipment.value ? store.recordsOf(currentEquipment.value.id!) : []
+)
+
+const getStatusType = (status: string) =>
+  ({ 运行中: 'success', 待维护: 'warning', 故障: 'danger', 停机: 'info' })[status] || 'info'
+
+const getMaintenanceTypeColor = (type: string) =>
+  ({ 常规维护: 'info', 故障维修: 'danger', 定期保养: 'success', 紧急维修: 'warning' })[type] || 'info'
+
+const getResultColor = (result: string) =>
+  ({ 完成: 'success', 进行中: 'warning', 待跟进: 'danger' })[result] || 'info'
+
+const dayDiff = (date: string) => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const target = new Date(date)
+  target.setHours(0, 0, 0, 0)
+  return Math.round((target.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
 }
 
-const getMaintenanceTypeColor = (type: string) => {
-  const map: Record<string, any> = {
-    '常规维护': 'info',
-    '故障维修': 'danger',
-    '定期保养': 'success',
-    '紧急维修': 'warning'
-  }
-  return map[type] || 'info'
-}
-
-const getResultColor = (result: string) => {
-  const map: Record<string, any> = {
-    '完成': 'success',
-    '进行中': 'warning',
-    '待跟进': 'danger'
-  }
-  return map[result] || 'info'
-}
-
-const isOverdue = (date: string) => {
-  return new Date(date) < new Date()
-}
-
-const handleFilter = () => {
-  console.log('Filter applied:', filterForm)
+const isOverdue = (date: string) => dayDiff(date) < 0
+const isDueSoon = (date: string) => {
+  const d = dayDiff(date)
+  return d >= 0 && d <= 7
 }
 
 const resetFilter = () => {
@@ -416,16 +367,19 @@ const resetFilter = () => {
 
 const filterByStatus = (status: string) => {
   filterForm.status = status
-  handleFilter()
 }
 
-const openMaintenanceDialog = (row: any) => {
+const goPlan = (equipmentName: string) => {
+  router.push({ path: '/maintenance/plan', query: { keyword: equipmentName } })
+}
+
+const openMaintenanceDialog = (row: Equipment) => {
   const today = new Date().toISOString().split('T')[0]
   const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  
-  maintenanceForm.equipmentId = row.id
+
+  maintenanceForm.equipmentId = row.id!
   maintenanceForm.equipmentName = row.equipmentName
-  maintenanceForm.equipmentCode = row.equipmentCode || row.equipmentCode
+  maintenanceForm.equipmentCode = row.equipmentCode
   maintenanceForm.maintenanceType = ''
   maintenanceForm.maintenanceDate = today
   maintenanceForm.maintenancePerson = ''
@@ -434,20 +388,18 @@ const openMaintenanceDialog = (row: any) => {
   maintenanceForm.cost = 0
   maintenanceForm.nextMaintenanceDate = nextMonth
   maintenanceForm.remark = ''
-  
+
   maintenanceDialogVisible.value = true
 }
 
 const submitMaintenance = async () => {
   if (!maintenanceFormRef.value) return
-  
   await maintenanceFormRef.value.validate((valid) => {
-    if (valid) {
-      submitLoading.value = true
-      
-      setTimeout(() => {
-        const newRecord: MaintenanceRecord = {
-          id: Date.now(),
+    if (!valid) return
+    submitLoading.value = true
+    setTimeout(() => {
+      try {
+        store.addMaintenanceRecord({
           equipmentId: maintenanceForm.equipmentId!,
           equipmentName: maintenanceForm.equipmentName,
           equipmentCode: maintenanceForm.equipmentCode,
@@ -458,78 +410,79 @@ const submitMaintenance = async () => {
           maintenanceResult: maintenanceForm.maintenanceResult,
           cost: maintenanceForm.cost,
           remark: maintenanceForm.remark,
-          createdAt: new Date().toISOString()
-        }
-        
-        maintenanceRecords.value.unshift(newRecord)
-        
-        const equipment = equipmentList.value.find(e => e.id === maintenanceForm.equipmentId)
-        if (equipment) {
-          equipment.lastMaintenanceDate = maintenanceForm.maintenanceDate
-          equipment.nextMaintenanceDate = maintenanceForm.nextMaintenanceDate
-          if (maintenanceForm.maintenanceResult === '完成') {
-            equipment.status = '运行中'
-          }
-        }
-        
-        const reminderIndex = maintenanceList.value.findIndex(m => m.id === maintenanceForm.equipmentId)
-        if (reminderIndex > -1) {
-          maintenanceList.value.splice(reminderIndex, 1)
-        }
-        
-        if (equipment) {
-          equipmentStats.value.maintenance--
-          equipmentStats.value.running++
-        }
-        
-        ElMessage.success('维护登记成功！')
+          nextMaintenanceDate: maintenanceForm.nextMaintenanceDate
+        })
+        ElMessage.success('维护登记成功，设备状态、逾期提醒和统计已同步更新')
         maintenanceDialogVisible.value = false
+      } catch (e) {
+        ElMessage.error(e instanceof Error ? e.message : '保存失败，请重试')
+      } finally {
         submitLoading.value = false
-      }, 500)
-    }
+      }
+    }, 300)
   })
 }
 
-const viewMaintenanceRecords = (row: any) => {
+const viewMaintenanceRecords = (row: Equipment) => {
   currentEquipment.value = row
   recordDialogVisible.value = true
 }
 
-const handleMaintenanceClick = (item: any) => {
-  console.log('Clicked reminder:', item)
+const TYPE_COLORS: Record<string, string> = {
+  抽油机: '#3b82f6',
+  阀门: '#22c55e',
+  传感器: '#f59e0b',
+  电机: '#ef4444',
+  其他: '#8b5cf6'
 }
 
-const initChart = () => {
+const renderChart = () => {
   if (!typeChart.value) return
-  const chart = echarts.init(typeChart.value)
+  if (!chart) chart = echarts.init(typeChart.value)
   chart.setOption({
     tooltip: { trigger: 'item' },
     legend: { orient: 'vertical', right: 10, top: 'center' },
-    series: [{
-      name: '设备类型',
-      type: 'pie',
-      radius: ['40%', '70%'],
-      center: ['40%', '50%'],
-      avoidLabelOverlap: false,
-      itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
-      label: { show: false },
-      emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold' } },
-      labelLine: { show: false },
-      data: [
-        { value: 68, name: '抽油机', itemStyle: { color: '#3b82f6' } },
-        { value: 42, name: '阀门', itemStyle: { color: '#22c55e' } },
-        { value: 25, name: '传感器', itemStyle: { color: '#f59e0b' } },
-        { value: 12, name: '电机', itemStyle: { color: '#ef4444' } },
-        { value: 9, name: '其他', itemStyle: { color: '#8b5cf6' } }
-      ]
-    }]
+    series: [
+      {
+        name: '设备类型',
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['40%', '50%'],
+        avoidLabelOverlap: false,
+        itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+        label: { show: false },
+        emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold' } },
+        labelLine: { show: false },
+        data: store.typeDistribution.map((d) => ({
+          ...d,
+          itemStyle: { color: TYPE_COLORS[d.name] || '#8b5cf6' }
+        }))
+      }
+    ]
   })
-  window.addEventListener('resize', () => chart.resize())
 }
 
-onMounted(() => {
-  initChart()
+const handleResize = () => chart?.resize()
+
+onMounted(async () => {
+  // 从看板/工作台跳转时可携带状态筛选
+  if (typeof route.query.status === 'string') filterForm.status = route.query.status
+  await nextTick()
+  renderChart()
+  window.addEventListener('resize', handleResize)
 })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  chart?.dispose()
+  chart = null
+})
+
+// 维护完成后类型分布图同步
+watch(
+  () => store.typeDistribution.map((d) => `${d.name}:${d.value}`).join(','),
+  () => nextTick(renderChart)
+)
 </script>
 
 <style scoped lang="scss">
@@ -545,37 +498,37 @@ onMounted(() => {
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: all 0.3s;
-  
+
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.12);
   }
-  
+
   &.running {
     .stat-value {
       color: #22c55e;
     }
   }
-  
+
   &.maintenance {
     .stat-value {
       color: #f59e0b;
     }
   }
-  
+
   &.fault {
     .stat-value {
       color: #ef4444;
     }
   }
-  
+
   .stat-value {
     font-size: 36px;
     font-weight: 600;
     color: #1e293b;
     margin-bottom: 8px;
   }
-  
+
   .stat-label {
     font-size: 14px;
     color: #64748b;
@@ -590,11 +543,11 @@ onMounted(() => {
 }
 
 .filter-form {
-  padding: 10px 0;
+  padding: 10px;
   background: #f8fafc;
   border-radius: 8px;
   margin-bottom: 0;
-  
+
   :deep(.el-form-item) {
     margin-bottom: 0;
   }
@@ -613,10 +566,6 @@ onMounted(() => {
   margin-left: 5px;
 }
 
-.ml-10 {
-  margin-left: 10px;
-}
-
 .ml-20 {
   margin-left: 20px;
 }
@@ -627,7 +576,7 @@ onMounted(() => {
 
 .timeline-item {
   cursor: pointer;
-  
+
   &:hover {
     .timeline-content {
       background: #f8fafc;
@@ -642,12 +591,12 @@ onMounted(() => {
   padding: 5px 0;
   border-radius: 4px;
   transition: background 0.3s;
-  
+
   .equipment-name {
     font-weight: 600;
     margin-right: 10px;
   }
-  
+
   .content {
     color: #64748b;
     margin-right: 10px;
@@ -658,11 +607,11 @@ onMounted(() => {
   padding: 10px;
   background: #f8fafc;
   border-radius: 8px;
-  
+
   .label {
     color: #64748b;
   }
-  
+
   .value {
     font-weight: 600;
     color: #1e293b;
